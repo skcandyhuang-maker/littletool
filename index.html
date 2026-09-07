@@ -1,0 +1,518 @@
+<title>域名體檢邏輯手冊</title>
+<style>
+  :root {
+    --paper: #F4F6F4;
+    --paper-raised: #FFFFFF;
+    --ink: #17221D;
+    --ink-soft: #52655C;
+    --ink-faint: #8B9A91;
+    --line: #DCE3DE;
+    --accent: #0F6B52;
+    --accent-soft: #E3F1EA;
+    --accent-ink: #0B4E3C;
+    --risk: #A93A2C;
+    --risk-soft: #F5E6E2;
+    --warn: #96650F;
+    --warn-soft: #F2E7D2;
+    --chip-bg: #EEF1EC;
+    --shadow: 0 1px 2px rgba(23,34,29,0.06), 0 6px 20px rgba(23,34,29,0.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #11201B;
+      --paper-raised: #16261F;
+      --ink: #E7EFEA;
+      --ink-soft: #A9BDB2;
+      --ink-faint: #6F8579;
+      --line: #24352C;
+      --accent: #3FBF95;
+      --accent-soft: #16342A;
+      --accent-ink: #8FE0C2;
+      --risk: #E2705F;
+      --risk-soft: #3B211D;
+      --warn: #D9A63D;
+      --warn-soft: #382C16;
+      --chip-bg: #1A2620;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #11201B;
+    --paper-raised: #16261F;
+    --ink: #E7EFEA;
+    --ink-soft: #A9BDB2;
+    --ink-faint: #6F8579;
+    --line: #24352C;
+    --accent: #3FBF95;
+    --accent-soft: #16342A;
+    --accent-ink: #8FE0C2;
+    --risk: #E2705F;
+    --risk-soft: #3B211D;
+    --warn: #D9A63D;
+    --warn-soft: #382C16;
+    --chip-bg: #1A2620;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Public Sans", -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+    line-height: 1.65;
+  }
+  .page {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 56px 24px 96px;
+  }
+  h1, h2, h3 { font-family: "Newsreader", "Noto Serif TC", serif; text-wrap: balance; }
+  .mono, .stat, .chip, .tag, .stamp { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+
+  /* ---------- Masthead ---------- */
+  .masthead {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 24px;
+    padding-bottom: 32px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 40px;
+  }
+  .eyebrow {
+    font-size: 12.5px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+    margin-bottom: 14px;
+  }
+  h1.title {
+    font-size: clamp(30px, 4.4vw, 42px);
+    font-weight: 600;
+    line-height: 1.18;
+    margin: 0 0 12px;
+    color: var(--ink);
+  }
+  .subhead {
+    font-size: 16.5px;
+    color: var(--ink-soft);
+    max-width: 46ch;
+  }
+  .stamp {
+    flex-shrink: 0;
+    border: 1.5px solid var(--accent);
+    color: var(--accent);
+    border-radius: 5px;
+    padding: 10px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-align: center;
+    transform: rotate(3deg);
+    white-space: nowrap;
+  }
+  .stamp small { display: block; font-size: 10px; font-weight: 400; opacity: 0.75; letter-spacing: 0.03em; margin-top: 2px;}
+
+  /* ---------- Section scaffolding ---------- */
+  section { margin-bottom: 56px; }
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .section-code {
+    font-size: 12px;
+    color: var(--ink-faint);
+    letter-spacing: 0.04em;
+  }
+  h2.section-title {
+    font-size: 23px;
+    font-weight: 600;
+    margin: 0;
+  }
+  p.lede { color: var(--ink-soft); margin: 0 0 20px; max-width: 66ch; }
+
+  /* ---------- Workflow strip ---------- */
+  .flow {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .flow-step {
+    padding: 20px 18px;
+    position: relative;
+    border-right: 1px solid var(--line);
+  }
+  .flow-step:last-child { border-right: none; }
+  .flow-step:not(:last-child)::after {
+    content: "→";
+    position: absolute;
+    right: -13px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--ink-faint);
+    font-size: 15px;
+    background: var(--paper-raised);
+    width: 24px;
+    text-align: center;
+    z-index: 2;
+  }
+  .flow-num { font-size: 11px; color: var(--accent); font-weight: 700; letter-spacing: 0.05em; margin-bottom: 6px; }
+  .flow-step h3 { font-size: 15.5px; font-weight: 600; margin: 0 0 6px; font-family: "Public Sans", sans-serif; }
+  .flow-step p { font-size: 13px; color: var(--ink-soft); margin: 0; }
+
+  /* ---------- Check-item grid ---------- */
+  .check-group { margin-bottom: 26px; }
+  .check-group-label {
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .check-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 12px;
+  }
+  .check-card {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    padding: 16px 16px 15px;
+  }
+  .check-card h4 {
+    font-size: 14.5px;
+    font-weight: 600;
+    margin: 0 0 6px;
+    font-family: "Public Sans", sans-serif;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .check-card p { font-size: 13px; color: var(--ink-soft); margin: 0; }
+  .check-card .why {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--line);
+    font-size: 12.5px;
+    color: var(--accent-ink);
+  }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+
+  /* ---------- Tab deep-dive cards ---------- */
+  .tabcard {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    padding: 24px 26px 26px;
+    margin-bottom: 18px;
+  }
+  .tabcard-head { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+  .tab-index {
+    font-size: 12.5px;
+    color: var(--paper-raised);
+    background: var(--accent);
+    border-radius: 5px;
+    padding: 3px 8px;
+    font-weight: 600;
+  }
+  .tabcard h3 { font-size: 19px; font-weight: 600; margin: 0; }
+  .tabcard .role { font-size: 13.5px; color: var(--ink-soft); margin: 4px 0 16px; }
+  .tabcard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 640px) { .tabcard-grid { grid-template-columns: 1fr; } }
+  .tabcard-grid h5 {
+    font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--ink-faint); margin: 0 0 8px; font-family: "Public Sans", sans-serif; font-weight: 600;
+  }
+  .tabcard-grid p, .tabcard-grid li { font-size: 13.5px; color: var(--ink); }
+  .tabcard-grid ul { margin: 0; padding-left: 18px; }
+  .tabcard-grid li { margin-bottom: 5px; }
+
+  .chip {
+    display: inline-block;
+    background: var(--chip-bg);
+    color: var(--ink);
+    font-size: 12px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    border: 1px solid var(--line);
+  }
+  .tag-risk { background: var(--risk-soft); color: var(--risk); border-color: transparent; font-weight: 600; }
+  .tag-warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; font-weight: 600; }
+  .tag-safe { background: var(--accent-soft); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
+
+  /* ---------- Talking-points table ---------- */
+  .talk-table { width: 100%; border-collapse: collapse; background: var(--paper-raised); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; box-shadow: var(--shadow); }
+  .talk-table th {
+    text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--ink-faint); font-weight: 600; padding: 12px 16px; border-bottom: 1px solid var(--line); font-family: "Public Sans", sans-serif;
+  }
+  .talk-table td { padding: 14px 16px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 13.5px; }
+  .talk-table tr:last-child td { border-bottom: none; }
+  .talk-table td:first-child { width: 34%; }
+  .finding-tag { font-weight: 600; font-size: 13px; margin-bottom: 4px; display: block; }
+  .talk-table .col { color: var(--ink-soft); font-size: 12.5px; }
+  .table-scroll { overflow-x: auto; }
+
+  /* ---------- Callouts ---------- */
+  .callout {
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    font-size: 13.5px;
+    color: var(--accent-ink);
+    margin-top: 18px;
+  }
+  .callout.warn { border-left-color: var(--warn); background: var(--warn-soft); color: var(--warn); }
+  .callout b { font-weight: 700; }
+
+  footer {
+    border-top: 1px solid var(--line);
+    padding-top: 20px;
+    margin-top: 60px;
+    font-size: 12.5px;
+    color: var(--ink-faint);
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  @media (max-width: 700px) {
+    .flow { grid-template-columns: 1fr 1fr; }
+    .flow-step:nth-child(2)::after { display: none; }
+    .flow-step:nth-child(2) { border-right: none; }
+  }
+</style>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,500&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<div class="page">
+
+  <div class="masthead">
+    <div>
+      <div class="eyebrow">業務教育訓練 · 騰雲運算</div>
+      <h1 class="title">域名體檢，怎麼看懂它在檢查什麼</h1>
+      <p class="subhead">這份手冊拆解「騰雲運算批量域名體檢工具」每一項檢查背後的邏輯——它在問什麼問題、怎麼問、以及答案怎麼變成你跟客戶談資安/CDN 服務的切入點。</p>
+    </div>
+    <div class="stamp">健檢工具<br>邏輯手冊<small>UAT v16 對應版</small></div>
+  </div>
+
+  <section>
+    <div class="section-head">
+      <span class="section-code mono">總覽</span>
+      <h2 class="section-title">一次體檢，走過哪四步</h2>
+    </div>
+    <p class="lede">工具的核心邏輯很像帶客戶做「網站健康檢查」：輸入網域、機器跑一輪檢查、結果存檔累積、你再把發現轉成對話。</p>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="flow-num">STEP 1</div>
+        <h3>輸入網域</h3>
+        <p>貼上客戶的網址。想精準測某個頁面（例如登入頁）就貼完整網址，只想測整個域名就貼裸網域即可。</p>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">STEP 2</div>
+        <h3>系統健檢</h3>
+        <p>依你左側勾選的項目，同時對這個網域跑 DNS、憑證、安全標頭、連線測試共 7 項自動化檢查。</p>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">STEP 3</div>
+        <h3>存檔累積</h3>
+        <p>結果自動寫入本機資料庫，同一個網域不會重複洗掉，掃過幾百筆客戶名單也不怕中斷。</p>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">STEP 4</div>
+        <h3>報告與對話</h3>
+        <p>下載 CSV 給內部或客戶，或直接在畫面上挑出弱點，帶進你的服務提案。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <span class="section-code mono">分頁 01</span>
+      <h2 class="section-title">七項檢查在查什麼</h2>
+    </div>
+    <p class="lede">「域名檢測」頁籤左側的勾選框，實際對應下面七件事。工具依你勾的項目跑，沒勾的欄位就維持「-」。</p>
+
+    <div class="check-group">
+      <div class="check-group-label">第一組・檢測項目</div>
+      <div class="check-grid">
+        <div class="check-card">
+          <h4><span class="dot"></span>DNS 解析</h4>
+          <p>查 A 紀錄（IP）跟 CNAME（別名指向）。多筆 IP 代表有做負載平衡；CNAME 裡的關鍵字用來比對是否已掛 CDN。</p>
+          <p class="why">客戶已用哪家 CDN、或根本沒有防護層，一眼看出。</p>
+        </div>
+        <div class="check-card">
+          <h4><span class="dot"></span>GeoIP 查詢</h4>
+          <p>把解析出的 IP 拿去查地理位置與 ISP／機房組織，需呼叫外部 API，速度較慢。</p>
+          <p class="why">主機是不是放在海外、用哪家雲，牽動法遵與延遲話題。</p>
+        </div>
+        <div class="check-card">
+          <h4><span class="dot"></span>SSL &amp; TLS 憑證</h4>
+          <p>讀憑證發行機構、剩餘天數，並檢查是否支援 TLS 1.3、以及 TLS 1.0/1.1 這兩個舊版本是否還開著。</p>
+          <p class="why"><span class="chip tag-warn">SSL Days 快到期</span> 是續約商機；<span class="chip tag-risk">TLS 1.0/1.1 未關閉</span> 是法遵風險。</p>
+        </div>
+        <div class="check-card">
+          <h4><span class="dot"></span>Security Header</h4>
+          <p>檢查 6 個現代安全標頭：HSTS、CSP、X-Frame-Options、X-Content-Type-Options、Referrer-Policy、Permissions-Policy。</p>
+          <p class="why">同一次檢測也順便判斷「能否被嵌入」（見下方說明）。</p>
+        </div>
+        <div class="check-card">
+          <h4><span class="dot"></span>Server 標頭偵測</h4>
+          <p>單獨抓 HTTP 回應裡的 <span class="chip mono">Server</span> 欄位，例如 <span class="chip mono">nginx/1.18</span>。與上面六項分開匯出。</p>
+          <p class="why">版本外洩＝攻擊者能鎖定已知漏洞下手，是很直觀的風險示範。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="check-group">
+      <div class="check-group-label">第二組・連線測試</div>
+      <div class="check-grid">
+        <div class="check-card">
+          <h4><span class="dot"></span>Simple Ping</h4>
+          <p>從你現在這台主機直接發一次請求，回報狀態碼（200／404／逾時）。</p>
+          <p class="why">最快速的「網站活著嗎」檢查，現場示範時第一個看的欄位。</p>
+        </div>
+        <div class="check-card">
+          <h4><span class="dot"></span>Global Ping</h4>
+          <p>透過 Globalping 這個公開節點網路，從國外機房發請求測試，速度較慢。</p>
+          <p class="why">跨區延遲／可用性的客觀數據，是加速服務的敲門磚。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout">
+      <b>「能否被嵌入」怎麼來的：</b> 它不是獨立勾選項，是「Security Header」這格勾起來後，順便用 X-Frame-Options 跟 CSP 的 frame-ancestors 判斷出來的——顯示 <span class="chip tag-risk">❗️是</span> 代表這個網頁可以被放進別人的 iframe 裡，也就是有 Clickjacking（點擊劫持）風險。
+    </div>
+    <div class="callout warn">
+      <b>現場示範前check一下：</b> 工具會自動跳過「資料庫裡已經存過的域名」，只認網域本身、不認你這次輸入的路徑。如果同一個網域你想換一個頁面路徑重新測，記得先在側邊欄「清空資料庫」，不然畫面顯示的會是舊結果。
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <span class="section-code mono">分頁 02–05</span>
+      <h2 class="section-title">另外四個頁籤，各自扮演什麼角色</h2>
+    </div>
+    <p class="lede">除了主要的域名檢測，工具還有四個頁籤，分別處理「批次驗證」「版本紀錄」「操作說明」跟「現場實證」。</p>
+
+    <div class="tabcard">
+      <div class="tabcard-head"><span class="tab-index">02</span><h3>IP 反查域名 (VT)</h3></div>
+      <p class="role">貼一批 IP，透過 VirusTotal 的歷史解析紀錄，反查出這個 IP 曾經被哪些域名指過，並即時驗證這些域名現在是否還指向這個 IP。</p>
+      <div class="tabcard-grid">
+        <div>
+          <h5>怎麼用</h5>
+          <ul>
+            <li>輸入 VirusTotal API Key</li>
+            <li>貼上 IP 清單，逐一查詢（內建 rate-limit 冷卻機制，避免被鎖）</li>
+            <li>結果自動存檔，畫面下方即時預覽</li>
+          </ul>
+        </div>
+        <div>
+          <h5>業務切入點</h5>
+          <ul>
+            <li>發現同一個 IP 掛了很多不相干的域名 → <span class="chip tag-warn">共站風險</span>，鄰居網站出事可能被連坐</li>
+            <li>反查到的舊域名已經不再指向這個 IP → 客戶可能換過機房/服務商，是重新盤點的時機</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="tabcard">
+      <div class="tabcard-head"><span class="tab-index">05</span><h3>惡意網站模擬</h3></div>
+      <p class="role">內嵌一個外部的 Clickjacking 示範工具，把分頁 01 裡「能否被嵌入」的抽象判定，變成一個看得到、點得到的活教材。</p>
+      <div class="tabcard-grid">
+        <div>
+          <h5>怎麼用</h5>
+          <ul>
+            <li>如果客戶網域顯示「能否被嵌入」為 <span class="chip tag-risk">❗️是</span>，直接切到這一頁</li>
+            <li>畫面若空白，代表目標網站本身有防護、無法被嵌入——這反而是它防護到位的證明</li>
+          </ul>
+        </div>
+        <div>
+          <h5>業務切入點</h5>
+          <ul>
+            <li>比起唸出「缺少 X-Frame-Options」，讓客戶親眼看到自己的頁面被套進一個假操作介面裡，說服力完全不同</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="tabcard">
+      <div class="tabcard-head"><span class="tab-index">03/04</span><h3>更新紀錄 ／ 操作手冊</h3></div>
+      <p class="role">03 是版本異動紀錄，讓你知道這套工具最近新增了什麼、舊版差在哪；04 連到線上操作手冊，遇到不會用的欄位直接查。</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <span class="section-code mono">話術卡</span>
+      <h2 class="section-title">看到這個結果，這樣接話</h2>
+    </div>
+    <p class="lede">下面是最常出現的檢測結果，跟對應的客戶對話切入點。<span class="chip">範例</span> 標記的資料為示範用途，非任何真實客戶紀錄。</p>
+    <div class="table-scroll">
+      <table class="talk-table">
+        <thead>
+          <tr><th>畫面上看到</th><th>代表什麼</th><th>你可以這樣說</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="finding-tag"><span class="chip tag-risk">能否被嵌入：❗️是</span></span><span class="col">分頁 01</span></td>
+            <td>網頁沒有設定防嵌入標頭，可被放進他人網站的隱形框架裡誘導點擊。</td>
+            <td>「我現場示範給您看」→ 切到分頁 05 實測。</td>
+          </tr>
+          <tr>
+            <td><span class="finding-tag"><span class="chip tag-risk">TLS 1.0/1.1 未關閉</span></span><span class="col">分頁 01</span></td>
+            <td>伺服器還接受十幾年前的舊加密協定，等同於門鎖還留著一把過期鑰匙。</td>
+            <td>對應法規/資安稽核常見要求項目，可帶入資安健檢或憑證代管服務。</td>
+          </tr>
+          <tr>
+            <td><span class="finding-tag"><span class="chip tag-warn">SSL Days：18</span></span><span class="col">分頁 01</span></td>
+            <td>憑證再 18 天到期，逾期未換等於網站直接跳出「不安全」警告。</td>
+            <td>續約/代管憑證服務的自然開場，時間點明確、急迫性高。</td>
+          </tr>
+          <tr>
+            <td><span class="finding-tag"><span class="chip tag-warn">Server：nginx/1.18.0</span></span><span class="col">分頁 01</span></td>
+            <td>網站主動告訴訪客它跑什麼軟體、什麼版本。</td>
+            <td>「這個版本網路上查得到已知漏洞」，帶出隱藏版本資訊/WAF 服務。</td>
+          </tr>
+          <tr>
+            <td><span class="finding-tag"><span class="chip">Security Headers：❌ 無</span></span><span class="col">分頁 01</span></td>
+            <td>六項現代安全標頭一個都沒設，屬於最基礎的資安體質不足。</td>
+            <td>用來開場的「體檢報告」——先講體質，再談要不要開處方。</td>
+          </tr>
+          <tr>
+            <td><span class="finding-tag"><span class="chip">CDN Provider：-</span></span><span class="col">分頁 01</span></td>
+            <td>網域沒偵測到任何已知 CDN／雲端服務商特徵，等於零防護層直接曝露來源主機。</td>
+            <td>加速＋防護的入門提案，起手式是「您現在等於沒有前導層」。</td>
+          </tr>
+          <tr>
+            <td><span class="finding-tag"><span class="chip tag-warn">同 IP 反查出 6 個域名</span></span><span class="col">分頁 02</span></td>
+            <td>這台主機同時服務多個不相干網站，屬於共站環境。</td>
+            <td>鄰站中毒、資源競爭的共站風險，帶出獨立主機/專屬資源的提案。</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <span>域名體檢邏輯手冊 · 對應騰雲運算批量域名體檢工具 UAT v16 版</span>
+    <span class="mono">整理：andy@skycloud.com.tw</span>
+  </footer>
+
+</div>
